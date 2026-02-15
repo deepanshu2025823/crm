@@ -5,6 +5,8 @@ import nodemailer from "nodemailer";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
+export const dynamic = "force-dynamic";
+
 export async function POST() {
   try {
     const pendingLeads = await db.lead.findMany({
