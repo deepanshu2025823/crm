@@ -5,6 +5,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const { leadId } = await req.json();
