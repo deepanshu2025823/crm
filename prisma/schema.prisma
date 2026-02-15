@@ -1,0 +1,167 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// --- 1. TENANT & SUBSCRIPTION (SaaS Logic) ---
+model Tenant {
+  id           String   @id @default(uuid())
+  companyName  String
+  domain       String?  @unique // e.g. "crm.client.com"
+  
+  // Subscription
+  planType     String   // "SINGLE_APP" or "BUNDLE"
+  activeApps   Json     // ["CRM", "MANEE", "AI_SDR"]
+  billingCycle String   // "MONTHLY", "ANNUALLY"
+  nextBilling  DateTime?
+  
+  leads        Lead[]
+  users        User[]
+  tickets      Ticket[]
+  createdAt    DateTime @default(now())
+}
+
+// --- 2. USERS (Auth & Roles) ---
+enum Role {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  SALES_AGENT
+  STUDENT
+  TEACHER
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String   // Hashed
+  name         String?
+  role         Role     @default(STUDENT)
+  
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  // Relations
+  tickets      Ticket[]
+  studentProfile StudentProfile?
+  createdAt    DateTime @default(now())
+}
+
+// --- 3. LEAD GENERATION (3 Separate Funnels) ---
+model Lead {
+  id           String   @id @default(uuid())
+  name         String?
+  email        String?  @unique
+  phone        String?  @unique
+  
+  // Funnel Logic
+  sourceDomain String   // "products", "services", "edtech"
+  persona      String?  // AI detected: "STUDENT", "CORPORATE", "MSME"
+  
+  // AI Intelligence
+  score        Int      @default(0) // 0 to 100
+  status       String   @default("NEW") // NEW, HOT, JUNK, CLOSED
+  aiSummary    String?  @db.Text
+  
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  // Marketing Sync (Lookalike/Exclusion)
+  marketingSync MarketingSync?
+  communications Communication[]
+  
+  createdAt    DateTime @default(now())
+}
+
+// --- 4. EDUX: EXAM & SECURITY ENGINE ---
+model Exam {
+  id           String   @id @default(uuid())
+  title        String   // "Java Final Year Test"
+  collegeName  String
+  difficulty   String   // "HARD" (AI Generated)
+  timeLimit    Int      // Minutes
+  questions    Json     // AI generated Questions (No Answer Key here)
+  
+  results      ExamResult[]
+  createdAt    DateTime @default(now())
+}
+
+model ExamResult {
+  id           String   @id @default(uuid())
+  examId       String
+  exam         Exam     @relation(fields: [examId], references: [id])
+  
+  // Captured Data
+  studentName  String
+  email        String
+  whatsapp     String
+  fatherName   String?
+  fatherOcc    String?
+  motherName   String?
+  motherOcc    String?
+  
+  // Security Data
+  faceImage    String?  // URL
+  whatsappDp   String?  // URL
+  deviceInfo    String?  @db.Text
+  securityFlags Json?   // ["TAB_SWITCH", "FACE_MISSING"]
+  
+  // Outcome
+  score        Int
+  status       String   // "PASSED", "FAILED", "DISQUALIFIED"
+  
+  createdAt    DateTime @default(now())
+}
+
+model StudentProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+  
+  category       String   // "FRESHER" or "ALUMNI"
+  isPlaced       Boolean  @default(false)
+}
+
+// --- 5. COMMUNICATION & SUPPORT ---
+model Communication {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  
+  type         String   // CALL, WHATSAPP, EMAIL
+  direction    String   // INBOUND, OUTBOUND
+  content      String   @db.Text
+  isAutonomous Boolean  @default(true) // True = Gemini sent it
+  
+  createdAt    DateTime @default(now())
+}
+
+model Ticket {
+  id           String   @id @default(uuid())
+  subject      String
+  priority     String   // HIGH, MED, LOW
+  status       String   // OPEN, RESOLVED
+  aiResolution String?  @db.Text
+  
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+}
+
+// --- 6. MARKETING INTELLIGENCE ---
+model MarketingSync {
+  id           String   @id @default(uuid())
+  leadId       String   @unique
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  
+  platform     String   // "FACEBOOK", "GOOGLE"
+  emailHash    String   // SHA-256
+  status       String   // "SYNCED_TO_EXCLUSION_LIST"
+  syncedAt     DateTime @default(now())
+}
